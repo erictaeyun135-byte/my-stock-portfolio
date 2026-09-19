@@ -21,8 +21,9 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 }
 
-# 🔑 Render Environment에서 API 키를 가져옵니다. (보안상 안전하게 보호됨)
+# 환경 변수 가져오기
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+FIREBASE_URL = os.environ.get("FIREBASE_URL")  # 👈 새로 추가됨
 
 CUSTOM_STOCK_CORRECTIONS = {
     "삼성전자": ("005930", "삼성전자", "KR"),
@@ -175,20 +176,33 @@ def analyze_stock_reason(stock_name: str):
     except Exception as e:
         return {"reason": f"AI 분석 실패: {str(e)}"}
 
-# 👇 포트폴리오를 클라우드 서버에 저장하고 불러오는 엔드포인트 추가 완료
+# 👇 파이어베이스 영구 저장용으로 변경된 부분
 @app.get("/api/portfolio")
 def get_portfolio():
-    if os.path.exists("portfolio.json"):
-        with open("portfolio.json", "r", encoding="utf-8") as f:
-            return json.load(f)
+    if not FIREBASE_URL:
+        return []
+    try:
+        # DB 주소 끝에 /portfolio.json을 붙여서 데이터를 가져옵니다.
+        res = requests.get(f"{FIREBASE_URL}/portfolio.json", timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            return data if data else []
+    except:
+        pass
     return []
 
 @app.post("/api/portfolio")
 async def save_portfolio(request: Request):
+    if not FIREBASE_URL:
+        return {"error": "DB URL이 설정되지 않았습니다."}
+    
     data = await request.json()
-    with open("portfolio.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    return {"status": "ok"}
+    try:
+        # 데이터를 DB에 덮어씁니다.
+        requests.put(f"{FIREBASE_URL}/portfolio.json", json=data, timeout=3)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/")
 def serve_frontend():
