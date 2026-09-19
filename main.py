@@ -1,7 +1,8 @@
 import os
 import time
 import requests
-from fastapi import FastAPI
+import json
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from google import genai
@@ -20,7 +21,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 }
 
-# 🔑 본인의 Gemini API 키를 입력해 주세요!
+# 🔑 Render Environment에서 API 키를 가져옵니다. (보안상 안전하게 보호됨)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 CUSTOM_STOCK_CORRECTIONS = {
@@ -151,8 +152,8 @@ def get_price(name: str):
 
 @app.get("/api/analyze")
 def analyze_stock_reason(stock_name: str):
-    if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-        return {"reason": "Gemini API 키가 설정되지 않았습니다. main.py에 API 키를 입력하세요."}
+    if not GEMINI_API_KEY:
+        return {"reason": "Gemini API 키가 설정되지 않았습니다. Render Environment 환경 변수를 확인하세요."}
 
     prompt = f"주식 종목 '{stock_name}'의 최근 주가 변동 원인을 한국어로 불렛포인트(•) 3줄로 명확히 요약해주세요."
     
@@ -174,7 +175,21 @@ def analyze_stock_reason(stock_name: str):
     except Exception as e:
         return {"reason": f"AI 분석 실패: {str(e)}"}
 
-# 👇 휴대폰 접속 시 웹페이지를 띄워주는 핵심 코드
+# 👇 포트폴리오를 클라우드 서버에 저장하고 불러오는 엔드포인트 추가 완료
+@app.get("/api/portfolio")
+def get_portfolio():
+    if os.path.exists("portfolio.json"):
+        with open("portfolio.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+@app.post("/api/portfolio")
+async def save_portfolio(request: Request):
+    data = await request.json()
+    with open("portfolio.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    return {"status": "ok"}
+
 @app.get("/")
 def serve_frontend():
     return FileResponse("index3.html")
