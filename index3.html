@@ -79,16 +79,34 @@
   </div>
 
   <script>
-    let stocks = JSON.parse(localStorage.getItem('my_portfolio_stocks')) || [];
+    let stocks = [];
     const aiState = {};
 
-    function saveStocks() {
-      localStorage.setItem('my_portfolio_stocks', JSON.stringify(stocks));
+    // 👇 클라우드 서버에서 종목 데이터를 불러오는 함수
+    async function loadStocksFromServer() {
+      try {
+        const res = await fetch('/api/portfolio');
+        stocks = await res.json();
+      } catch (err) {
+        console.error("포트폴리오 불러오기 실패:", err);
+      }
+    }
+
+    // 👇 클라우드 서버에 종목 데이터를 저장하는 함수
+    async function saveStocks() {
+      try {
+        await fetch('/api/portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(stocks)
+        });
+      } catch (err) {
+        console.error("포트폴리오 저장 실패:", err);
+      }
     }
 
     async function fetchStockInfo(queryName) {
       try {
-        // 👇 클라우드 서버용으로 주소 변경됨
         const res = await fetch(`/api/price?name=${encodeURIComponent(queryName)}`);
         const data = await res.json();
         if (data.error) return null;
@@ -241,7 +259,6 @@
 
       try {
         const queryName = stock.name.split(' (')[0];
-        // 👇 클라우드 서버용으로 주소 변경됨
         const res = await fetch(`/api/analyze?stock_name=${encodeURIComponent(queryName)}`);
         const data = await res.json();
 
@@ -398,6 +415,7 @@
     }
 
     async function init() {
+      await loadStocksFromServer(); // 서버에서 먼저 불러온 뒤 화면에 표시!
       render();
       await updateAllStocks();
     }
