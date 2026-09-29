@@ -21,9 +21,8 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 }
 
-# 환경 변수 가져오기
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-FIREBASE_URL = os.environ.get("FIREBASE_URL")  # 👈 새로 추가됨
+FIREBASE_URL = os.environ.get("FIREBASE_URL")
 
 CUSTOM_STOCK_CORRECTIONS = {
     "삼성전자": ("005930", "삼성전자", "KR"),
@@ -79,7 +78,7 @@ def fetch_us_stock_price(ticker: str, display_title: str):
                 "exchange_rate": exchange_rate
             }
     except Exception as e:
-        print("해외 시세 조회 실패:", e)
+        pass
     return {"error": f"'{ticker}' 해외 시세를 불러오지 못했습니다."}
 
 def fetch_kr_stock_price(code: str, name: str):
@@ -100,7 +99,7 @@ def fetch_kr_stock_price(code: str, name: str):
                     "currency": "KRW"
                 }
     except Exception as e:
-        print("국내 시세 조회 실패:", e)
+        pass
     return {"error": f"'{name}' 국내 시세를 불러오지 못했습니다."}
 
 def search_naver_finance(query: str):
@@ -154,7 +153,7 @@ def get_price(name: str):
 @app.get("/api/analyze")
 def analyze_stock_reason(stock_name: str):
     if not GEMINI_API_KEY:
-        return {"reason": "Gemini API 키가 설정되지 않았습니다. Render Environment 환경 변수를 확인하세요."}
+        return {"reason": "Gemini API 키가 설정되지 않았습니다."}
 
     prompt = f"주식 종목 '{stock_name}'의 최근 주가 변동 원인을 한국어로 불렛포인트(•) 3줄로 명확히 요약해주세요."
     
@@ -169,20 +168,21 @@ def analyze_stock_reason(stock_name: str):
                 if response and response.text:
                     return {"reason": response.text.strip()}
             except Exception as err:
-                if "503" in str(err) and attempt < 2:
-                    time.sleep(1.5)
+                err_str = str(err)
+                # 👇 503(과부하)뿐만 아니라 500(구글 내부 오류) 발생 시에도 자동으로 재시도하도록 업그레이드!
+                if ("503" in err_str or "500" in err_str) and attempt < 2:
+                    time.sleep(2) # 2초 쉬었다가 다시 질문
                     continue
                 raise err
     except Exception as e:
-        return {"reason": f"AI 분석 실패: {str(e)}"}
+        # 끝까지 실패했을 때 사용자에게 보여줄 친절한 메시지
+        return {"reason": f"구글 AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 버튼을 다시 눌러주세요.\n(에러코드: {str(e)})"}
 
-# 👇 파이어베이스 영구 저장용으로 변경된 부분
 @app.get("/api/portfolio")
 def get_portfolio():
     if not FIREBASE_URL:
         return []
     try:
-        # DB 주소 끝에 /portfolio.json을 붙여서 데이터를 가져옵니다.
         res = requests.get(f"{FIREBASE_URL}/portfolio.json", timeout=3)
         if res.status_code == 200:
             data = res.json()
@@ -198,7 +198,6 @@ async def save_portfolio(request: Request):
     
     data = await request.json()
     try:
-        # 데이터를 DB에 덮어씁니다.
         requests.put(f"{FIREBASE_URL}/portfolio.json", json=data, timeout=3)
         return {"status": "ok"}
     except Exception as e:
