@@ -68,6 +68,15 @@ def fetch_us_stock_price(ticker: str, display_title: str):
             price_krw = price_usd * exchange_rate
             final_name = f"{display_title} ({ticker})" if display_title != ticker else ticker
 
+            # 배당금 정보 가져오기 (Yahoo Quote API)
+            div_rate = 0.0
+            try:
+                q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
+                q_res = requests.get(q_url, headers=HEADERS, timeout=2).json()
+                div_rate = q_res['quoteResponse']['result'][0].get('trailingAnnualDividendRate', 0.0)
+            except:
+                pass
+
             return {
                 "price": float(price_krw),
                 "price_usd": price_usd,
@@ -75,7 +84,8 @@ def fetch_us_stock_price(ticker: str, display_title: str):
                 "ticker": ticker,
                 "is_us": True,
                 "currency": "USD",
-                "exchange_rate": exchange_rate
+                "exchange_rate": exchange_rate,
+                "dividend_rate": div_rate # 추가됨 (USD 기준 1주당 연간 배당금)
             }
     except Exception as e:
         pass
@@ -90,13 +100,30 @@ def fetch_kr_stock_price(code: str, name: str):
             if data.get("datas") and len(data["datas"]) > 0:
                 stock_data = data["datas"][0]
                 price = float(str(stock_data["closePrice"]).replace(",", ""))
+                
+                # 배당금 정보 가져오기 (Yahoo Quote API 활용)
+                div_rate = 0.0
+                try:
+                    q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={code}.KS"
+                    q_res = requests.get(q_url, headers=HEADERS, timeout=2).json()
+                    res_list = q_res.get('quoteResponse', {}).get('result', [])
+                    if not res_list:
+                        q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={code}.KQ"
+                        q_res = requests.get(q_url, headers=HEADERS, timeout=2).json()
+                        res_list = q_res.get('quoteResponse', {}).get('result', [])
+                    if res_list:
+                        div_rate = res_list[0].get('trailingAnnualDividendRate', 0.0)
+                except:
+                    pass
+
                 return {
                     "price": price,
                     "name": stock_data.get("stockName") or name,
                     "code": code,
                     "ticker": code,
                     "is_us": False,
-                    "currency": "KRW"
+                    "currency": "KRW",
+                    "dividend_rate": div_rate # 추가됨 (KRW 기준 1주당 연간 배당금)
                 }
     except Exception as e:
         pass
@@ -200,6 +227,38 @@ def analyze_stock_reason(stock_name: str):
     except Exception as e:
         return {"reason": "⚠️ AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 다시 시도해주세요."}
 
+# 👇 추가됨: 포트폴리오 전체 AI 모닝 브리핑 엔진
+@app.post("/api/analyze_portfolio")
+async def analyze_portfolio(request: Request):
+    if not GEMINI_API_KEY:
+        return {"reason": "⚠️ Gemini API 키가 설정되지 않았습니다."}
+    
+    data = await request.json()
+    portfolio_text = data.get("text", "")
+    
+    prompt = f"다음은 내 주식 포트폴리오 현황이야.\n{portfolio_text}\n이 포트폴리오의 전반적인 상태(수익/손실)와 관련된 최근 글로벌 증시(미국/한국) 시장 동향을 바탕으로, '오늘의 모닝 브리핑'을 3~4줄로 펀드매니저처럼 멋지게 요약해줘."
+    
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model='gemini-3.6-flash',
+                    contents=prompt,
+                )
+                if response and response.text:
+                    return {"reason": response.text.strip()}
+            except Exception as err:
+                err_str = str(err)
+                if ("503" in err_str or "500" in err_str) and attempt < 2:
+                    time.sleep(2)
+                    continue
+                if "429" in err_str or "quota" in err_str.lower():
+                    return {"reason": "⏳ 무료 AI 사용량을 잠시 초과했습니다. 잠시 후 다시 눌러주세요."}
+                raise err
+    except Exception as e:
+        return {"reason": "⚠️ AI 서버가 일시적으로 응답하지 않습니다."}
+
 @app.get("/api/portfolio")
 def get_portfolio():
     if not FIREBASE_URL:
@@ -243,7 +302,6 @@ def get_manifest():
         ]
     }
 
-# 👇 크롬 브라우저를 속일 가짜 서비스 워커(엔진) 추가
 @app.get("/sw.js")
 def get_sw():
     js_code = "self.addEventListener('fetch', function(event) {});"
