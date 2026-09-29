@@ -195,13 +195,11 @@ def analyze_stock_reason(stock_name: str):
                     time.sleep(2)
                     continue
                 
-                # 👇 핵심 수정 부분: 429 에러(할당량 초과) 발생 시 지저분한 코드를 예쁜 문장으로 필터링
                 if "429" in err_str or "quota" in err_str.lower():
                     return {"reason": "⏳ 무료 AI 사용량을 잠시 초과했습니다.\n약 1분 정도 기다리신 후 다시 눌러주세요."}
                 
                 raise err
     except Exception as e:
-        # 그 외의 예상치 못한 모든 에러도 복잡한 시스템 코드를 숨기고 심플하게 출력
         return {"reason": "⚠️ AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 다시 시도해주세요."}
 
 @app.get("/api/portfolio")
@@ -228,6 +226,25 @@ async def save_portfolio(request: Request):
         return {"status": "ok"}
     except Exception as e:
         return {"error": str(e)}
+
+# 👇 안드로이드 앱 설치 승인을 위한 이름표(Manifest) 발급 기능
+@app.get("/manifest.json")
+def get_manifest():
+    return {
+        "name": "CYBER PORTFOLIO",
+        "short_name": "PORTFOLIO",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#1e1b4b",
+        "theme_color": "#1e1b4b",
+        "icons": [
+            {
+                "src": "https://cdn-icons-png.flaticon.com/512/7376/7376517.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ]
+    }
 
 @app.get("/")
 def serve_frontend():
