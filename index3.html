@@ -4,13 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   
-  <!-- 👇 웹사이트를 스마트폰 앱처럼(주소창 없이 전체화면) 만들어주는 마법의 코드 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="포트폴리오">
   <meta name="theme-color" content="#1e1b4b">
   
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- 👇 만들어진 엔진을 웹사이트에 연결하는 코드 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+
   <title>CYBER PORTFOLIO</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
