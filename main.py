@@ -121,11 +121,27 @@ def search_naver_finance(query: str):
         pass
     return None
 
+# 👇 새롭게 추가된 전 세계 주식/ETF 검색 엔진
+def search_yahoo_finance(query: str):
+    try:
+        url = f"https://query2.finance.yahoo.com/v1/finance/search?q={requests.utils.quote(query)}"
+        res = requests.get(url, headers=HEADERS, timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            quotes = data.get("quotes", [])
+            for q in quotes:
+                if q.get("quoteType") in ["EQUITY", "ETF"]:
+                    return {"type": "US", "ticker": q.get("symbol"), "name": q.get("shortname") or query}
+    except Exception:
+        pass
+    return None
+
 @app.get("/api/price")
 def get_price(name: str):
     query = name.strip()
     clean_q = query.lower().replace(" ", "")
 
+    # 1. 커스텀 단축어 (가장 빠름)
     if clean_q in CUSTOM_STOCK_CORRECTIONS:
         code_or_ticker, display_name, market_type = CUSTOM_STOCK_CORRECTIONS[clean_q]
         if market_type == "KR":
@@ -133,22 +149,34 @@ def get_price(name: str):
         else:
             return fetch_us_stock_price(code_or_ticker, display_name)
 
+    # 2. 한국 주식 종목코드 (6자리 숫자)
     if len(query) == 6 and query.isdigit():
         return fetch_kr_stock_price(query, query)
 
+    # 3. 네이버 증권 검색 (한국 주식 및 유명 해외 주식 한글 이름)
     naver_res = search_naver_finance(query)
     if naver_res:
         if naver_res["type"] == "KR":
             return fetch_kr_stock_price(naver_res["code"], naver_res["name"])
         elif naver_res["type"] == "US":
-            return fetch_us_stock_price(naver_res["ticker"], naver_res["name"])
+            res = fetch_us_stock_price(naver_res["ticker"], naver_res["name"])
+            if "error" not in res:
+                return res
 
-    if len(query) <= 5 and query.isalpha():
+    # 4. 야후 파이낸스 글로벌 검색 (네이버에 없는 모든 ETF 및 글로벌 주식)
+    yahoo_res = search_yahoo_finance(query)
+    if yahoo_res:
+        res = fetch_us_stock_price(yahoo_res["ticker"], yahoo_res["name"])
+        if "error" not in res:
+            return res
+
+    # 5. 최후의 수단: 영문 티커(알파벳)로 직접 찔러보기
+    if query.isalpha():
         res = fetch_us_stock_price(query.upper(), query.upper())
         if "error" not in res:
             return res
 
-    return {"error": f"'{name}'의 시세를 찾을 수 없습니다."}
+    return {"error": f"'{name}'의 시세를 찾을 수 없습니다. 영문 티커(예: AAPL)나 6자리 종목코드로 입력해 보세요."}
 
 @app.get("/api/analyze")
 def analyze_stock_reason(stock_name: str):
@@ -169,13 +197,11 @@ def analyze_stock_reason(stock_name: str):
                     return {"reason": response.text.strip()}
             except Exception as err:
                 err_str = str(err)
-                # 👇 503(과부하)뿐만 아니라 500(구글 내부 오류) 발생 시에도 자동으로 재시도하도록 업그레이드!
                 if ("503" in err_str or "500" in err_str) and attempt < 2:
-                    time.sleep(2) # 2초 쉬었다가 다시 질문
+                    time.sleep(2)
                     continue
                 raise err
     except Exception as e:
-        # 끝까지 실패했을 때 사용자에게 보여줄 친절한 메시지
         return {"reason": f"구글 AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 버튼을 다시 눌러주세요.\n(에러코드: {str(e)})"}
 
 @app.get("/api/portfolio")
