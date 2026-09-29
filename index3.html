@@ -2,18 +2,23 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <!-- 👇 모바일 화면 비율 찌그러짐 방지 & 터치 최적화 코드 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <!-- 👇 웹사이트를 스마트폰 앱처럼(주소창 없이 전체화면) 만들어주는 마법의 코드 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="포트폴리오">
+  <meta name="theme-color" content="#1e1b4b">
+  
   <title>CYBER PORTFOLIO</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* 배경 우주 느낌 그라데이션 */
     body {
       background: radial-gradient(circle at top right, #1e1b4b, #0f172a, #000000);
       background-attachment: fixed;
       color: #e2e8f0;
     }
-    /* 반투명 유리 질감 (Glassmorphism) */
     .glass-panel {
       background: rgba(255, 255, 255, 0.05);
       backdrop-filter: blur(12px);
@@ -21,7 +26,6 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     }
-    /* 다크모드용 번쩍임 애니메이션 (한국식: 빨강 상승, 파랑 하락) */
     @keyframes flashUpDark {
       0% { background-color: rgba(248, 113, 113, 0.2); box-shadow: inset 0 0 15px rgba(248, 113, 113, 0.4); }
       100% { background-color: rgba(255, 255, 255, 0.05); box-shadow: none; }
@@ -33,7 +37,6 @@
     .flash-up { animation: flashUpDark 1s ease-out; }
     .flash-down { animation: flashDownDark 1s ease-out; }
     
-    /* 입력창 디자인 */
     .cyber-input {
       background: rgba(0, 0, 0, 0.4);
       border: 1px solid rgba(255, 255, 255, 0.2);
@@ -48,7 +51,6 @@
 </head>
 <body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto space-y-5 font-sans">
   
-  <!-- 상단 헤더 -->
   <div class="flex justify-between items-center mb-2">
     <h1 class="text-xl md:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 drop-shadow-sm">
       CYBER PORTFOLIO
@@ -59,7 +61,6 @@
     </div>
   </div>
   
-  <!-- 총합 요약 패널 (Glass) -->
   <div class="glass-panel rounded-2xl p-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-center items-center">
     <div class="col-span-2 md:col-span-1 border-b md:border-b-0 border-white/10 pb-3 md:pb-0">
       <span class="text-xs text-indigo-300 block font-semibold mb-1 tracking-wide">총 평가 금액</span>
@@ -76,9 +77,7 @@
     </div>
   </div>
 
-  <!-- 종목 추가 패널 (Glass) -->
   <div class="glass-panel rounded-2xl p-5 space-y-4">
-    <!-- 모바일 터치 최적화 레이아웃 (Grid) -->
     <div class="grid grid-cols-2 gap-3">
       <div class="col-span-2">
         <label class="text-[10px] font-semibold text-indigo-300 mb-1.5 block tracking-wider">STOCK NAME / TICKER</label>
@@ -105,7 +104,6 @@
     </button>
   </div>
 
-  <!-- 보유 종목 리스트 패널 -->
   <div class="space-y-3">
     <div class="flex justify-between items-center px-1">
       <h2 class="font-bold text-gray-300 text-sm tracking-widest">ASSETS</h2>
@@ -345,7 +343,6 @@
           : `${Math.round(s.currentPrice).toLocaleString()}원`;
 
         const profitAmtFormatted = `${profitAmt >= 0 ? '+' : ''}${Math.round(profitAmt).toLocaleString()}원`;
-        // 한국식 컬러: 상승=빨강(red-400), 하락=파랑(blue-400)
         const profitColor = profitRate >= 0 ? 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]' : 'text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]';
         
         const flashClass = s._priceStatus === 'up' ? 'flash-up' : (s._priceStatus === 'down' ? 'flash-down' : 'glass-panel');
@@ -378,7 +375,6 @@
         container.innerHTML += `
           <div id="stock-item-${index}" class="rounded-xl p-4 text-sm transition-all ${flashClass}">
             <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
-              <!-- 좌측: 이름 및 평단가 -->
               <div>
                 <div class="font-extrabold text-white text-base flex items-center gap-2">
                   ${s.name} 
@@ -388,7 +384,6 @@
                 <div class="text-xs text-gray-400 mt-1">AVG: <span class="text-gray-300">${buyPriceDisplay}</span></div>
               </div>
               
-              <!-- 우측: 현재가 및 손익 -->
               <div class="flex flex-row md:flex-col justify-between items-end">
                 <div class="text-left md:text-right">
                   <div class="text-xs text-gray-400 mb-0.5">NOW: <b class="text-white text-sm md:text-base">${currentPriceDisplay}</b></div>
@@ -399,7 +394,6 @@
                   </div>
                 </div>
                 
-                <!-- 버튼 그룹 -->
                 <div class="flex items-center space-x-2 mt-0 md:mt-2">
                   <button id="ai-btn-${index}" onclick="toggleAiSummary(${index})" class="text-[11px] bg-indigo-600/20 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-md transition font-bold tracking-wide">
                     AI 분석
@@ -432,7 +426,6 @@
       const totalProfitEl = document.getElementById('totalProfit');
       totalProfitEl.innerText = `${totalProfitRate >= 0 ? '+' : ''}${totalProfitRate.toFixed(2)}%`;
       
-      // 한국식 컬러: 상승=빨강, 하락=파랑
       const tColor = totalProfitRate >= 0 ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]' : 'text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]';
       profitAmtEl.className = `text-xs font-bold mt-0.5 ${tColor}`;
       totalProfitEl.className = `text-sm md:text-base font-bold ${tColor}`;
