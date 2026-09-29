@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#1e1b4b">
   
   <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- 차트 라이브러리 추가 -->
   
-  <!-- 👇 만들어진 엔진을 웹사이트에 연결하는 코드 -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -59,7 +59,7 @@
     }
   </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto space-y-5 font-sans">
+<body class="min-h-screen p-4 md:p-8 max-w-2xl mx-auto space-y-5 font-sans pb-10">
   
   <div class="flex justify-between items-center mb-2">
     <h1 class="text-xl md:text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 drop-shadow-sm">
@@ -84,6 +84,38 @@
       <span class="text-[10px] text-gray-400 block font-semibold mb-1">총 손익 / 수익률</span>
       <div id="totalProfitAmt" class="text-xs font-bold mt-0.5">0 원</div>
       <div id="totalProfit" class="text-sm md:text-base font-bold">0.00%</div>
+    </div>
+  </div>
+
+  <!-- 👇 1. 도넛 차트 & 배당금 패널 / 3. AI 모닝 브리핑 패널 추가됨 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- 도넛 차트 & 배당금 -->
+    <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
+      <h2 class="text-xs font-bold text-indigo-300 tracking-widest mb-3">ASSET ALLOCATION</h2>
+      <div class="relative h-40 w-full mb-4">
+        <canvas id="portfolioChart"></canvas>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span class="text-[10px] text-gray-400">월 예상 배당금</span>
+          <span id="monthlyDiv" class="text-sm font-bold text-green-400">0 원</span>
+        </div>
+      </div>
+      <div class="flex justify-between items-center text-xs border-t border-white/10 pt-3">
+        <span class="text-gray-400">연간 예상 총 배당금</span>
+        <span id="annualDiv" class="font-bold text-white">0 원</span>
+      </div>
+    </div>
+
+    <!-- AI 모닝 브리핑 -->
+    <div class="glass-panel rounded-2xl p-5 flex flex-col">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xs font-bold text-indigo-300 tracking-widest">AI MORNING BRIEFING</h2>
+        <button onclick="getMorningBriefing()" id="briefingBtn" class="text-[10px] bg-indigo-600/30 hover:bg-indigo-600/60 text-indigo-200 px-2.5 py-1.5 rounded border border-indigo-500/50 transition shadow-[0_0_8px_rgba(99,102,241,0.3)]">
+          스캔 시작 ➔
+        </button>
+      </div>
+      <div id="briefingContent" class="flex-1 bg-black/40 rounded-lg p-3 text-xs text-gray-300 whitespace-pre-line overflow-y-auto h-32 border border-white/5 leading-relaxed">
+        버튼을 눌러 전체 포트폴리오 AI 요약을 받아보세요.
+      </div>
     </div>
   </div>
 
@@ -126,6 +158,9 @@
     let stocks = [];
     const aiState = {};
 
+    // 네온 컬러 리스트 (차트용)
+    const neonColors = ['#60a5fa', '#f472b6', '#4ade80', '#c084fc', '#facc15', '#2dd4bf', '#fb923c', '#f87171'];
+
     async function loadStocksFromServer() {
       try {
         const res = await fetch('/api/portfolio');
@@ -155,6 +190,50 @@
         return data;
       } catch {
         return null;
+      }
+    }
+
+    // 👇 포트폴리오 AI 브리핑 스캔 함수 추가
+    async function getMorningBriefing() {
+      if (stocks.length === 0) {
+        alert("포트폴리오에 종목을 먼저 추가해주세요!");
+        return;
+      }
+      
+      const btn = document.getElementById('briefingBtn');
+      const content = document.getElementById('briefingContent');
+      
+      btn.innerText = "분석 중...";
+      btn.disabled = true;
+      content.innerHTML = `<div class="flex items-center gap-2 text-indigo-300 h-full justify-center"><div class="w-2 h-2 bg-indigo-400 rounded-full animate-ping"></div> AI 분석 중...</div>`;
+
+      let summaryText = "";
+      let totalVal = 0;
+      let totalCost = 0;
+      stocks.forEach(s => {
+          const cost = s.buyPrice * s.qty;
+          const val = s.currentPrice * s.qty;
+          const rate = ((val - cost) / cost) * 100;
+          totalVal += val;
+          totalCost += cost;
+          summaryText += `- ${s.name}: 비중 ${Math.round(val)}, 수익률 ${rate.toFixed(2)}%\n`;
+      });
+      const totalRate = ((totalVal - totalCost) / totalCost) * 100;
+      summaryText = `총 수익률: ${totalRate.toFixed(2)}%\n\n[보유 종목]\n` + summaryText;
+
+      try {
+          const res = await fetch('/api/analyze_portfolio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: summaryText })
+          });
+          const data = await res.json();
+          content.innerText = data.reason || "분석 결과를 불러오지 못했습니다.";
+      } catch(e) {
+          content.innerText = "서버 통신 에러가 발생했습니다.";
+      } finally {
+          btn.innerText = "스캔 시작 ➔";
+          btn.disabled = false;
       }
     }
 
@@ -195,6 +274,7 @@
       const officialName = result.name;
       const currentPriceKRW = result.price;
       const currentPriceUSD = result.price_usd || null;
+      const divRate = result.dividend_rate || 0; // 야후에서 가져온 1주당 배당금
 
       const existingIndex = stocks.findIndex(s => s.name.toLowerCase() === officialName.toLowerCase());
 
@@ -211,6 +291,7 @@
         existing.qty = totalQty;
         existing.currentPrice = currentPriceKRW;
         if (currentPriceUSD) existing.currentPriceUSD = currentPriceUSD;
+        existing.dividendRate = divRate;
       } else {
         stocks.push({ 
           name: officialName, 
@@ -219,7 +300,8 @@
           qty: inputQty, 
           currentPrice: currentPriceKRW,
           currentPriceUSD: currentPriceUSD,
-          is_us: result.is_us || false
+          is_us: result.is_us || false,
+          dividendRate: divRate
         });
       }
       
@@ -233,28 +315,22 @@
 
     function editStock(index) {
       const stock = stocks[index];
-      
       const newQtyInput = prompt(`[${stock.name}] 변경할 수량을 입력하세요:`, stock.qty);
       if (newQtyInput === null) return;
-      
       const newQty = parseFloat(newQtyInput);
       if (isNaN(newQty) || newQty <= 0) {
         alert('유효한 수량을 입력해주세요.');
         return;
       }
-
       const defaultPrice = stock.buyPriceUSD ? stock.buyPriceUSD : Math.round(stock.buyPrice);
       const unitText = stock.buyPriceUSD ? '달러($)' : '원(₩)';
-      
       const newPriceInput = prompt(`[${stock.name}] 변경할 매수 평단가를 입력하세요 (${unitText}):`, defaultPrice);
       if (newPriceInput === null) return;
-
       const newPrice = parseFloat(newPriceInput);
       if (isNaN(newPrice) || newPrice <= 0) {
         alert('유효한 단가를 입력해주세요.');
         return;
       }
-
       stock.qty = newQty;
       if (stock.buyPriceUSD) {
         stock.buyPriceUSD = newPrice;
@@ -263,7 +339,6 @@
       } else {
         stock.buyPrice = newPrice;
       }
-      
       saveStocks();
       render();
     }
@@ -277,33 +352,26 @@
 
     async function toggleAiSummary(index) {
       const stock = stocks[index];
-      
       if (!aiState[stock.name]) {
         aiState[stock.name] = { isOpen: false, isLoading: false, text: '' };
       }
       const state = aiState[stock.name];
-
       if (state.isOpen) {
         state.isOpen = false;
         render();
         return;
       }
-
       state.isOpen = true;
-
       if (state.text && !state.isLoading) {
         render();
         return;
       }
-
       state.isLoading = true;
       render(); 
-
       try {
         const queryName = stock.name.split(' (')[0];
         const res = await fetch(`/api/analyze?stock_name=${encodeURIComponent(queryName)}`);
         const data = await res.json();
-
         if (data.reason) {
           state.text = data.reason;
         } else {
@@ -321,6 +389,13 @@
       const container = document.getElementById('result');
       container.innerHTML = '';
 
+      let totalCost = 0;
+      let totalValue = 0;
+      let totalAnnualDividendKRW = 0;
+      
+      let chartLabels = [];
+      let chartData = [];
+
       if (stocks.length === 0) {
         container.innerHTML = '<div class="glass-panel rounded-xl py-8 text-center text-sm text-gray-500">보유 종목이 없습니다.</div>';
         document.getElementById('totalCost').innerText = '0 원';
@@ -329,11 +404,14 @@
         document.getElementById('totalProfitAmt').className = 'text-xs font-bold text-gray-400 mt-0.5';
         document.getElementById('totalProfit').innerText = '0.00%';
         document.getElementById('totalProfit').className = 'text-sm md:text-base font-bold text-gray-400';
+        document.getElementById('annualDiv').innerText = '0 원';
+        document.getElementById('monthlyDiv').innerText = '0 원';
+        
+        if (window.portfolioChartInstance) {
+            window.portfolioChartInstance.destroy();
+        }
         return;
       }
-
-      let totalCost = 0;
-      let totalValue = 0;
 
       stocks.forEach((s, index) => {
         const cost = s.buyPrice * s.qty;
@@ -343,6 +421,21 @@
 
         totalCost += cost;
         totalValue += val;
+
+        // 차트용 데이터 축적
+        chartLabels.push(s.name.split(' ')[0]); // 차트에 이름이 너무 길게 안 나오도록
+        chartData.push(val);
+
+        // 배당금 계산
+        let localDiv = s.dividendRate || 0;
+        let divKRW = 0;
+        if (s.is_us && s.currentPriceUSD) {
+            let rate = s.currentPrice / s.currentPriceUSD; // 현재 환율 추출
+            divKRW = localDiv * s.qty * rate; // 달러 배당금 * 수량 * 환율
+        } else {
+            divKRW = localDiv * s.qty; // 원화 배당금 * 수량
+        }
+        totalAnnualDividendKRW += divKRW;
 
         const buyPriceDisplay = s.buyPriceUSD 
           ? `$${s.buyPriceUSD.toFixed(2)} <span class="text-[10px] text-gray-500">(${Math.round(s.buyPrice).toLocaleString()}원)</span>` 
@@ -362,23 +455,9 @@
         let aiBoxHtml = '';
         if (state.isOpen) {
           if (state.isLoading) {
-            aiBoxHtml = `
-              <div class="mt-3 p-3 bg-indigo-900/40 border border-indigo-500/30 rounded-lg text-xs text-indigo-200">
-                <div class="font-bold flex items-center gap-1.5 mb-1.5 text-indigo-300">
-                  <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping"></div> AI ANALYZING...
-                </div>
-                <div class="animate-pulse text-[11px] text-indigo-200/60">최근 변동 원인을 스캔 중입니다...</div>
-              </div>
-            `;
+            aiBoxHtml = `<div class="mt-3 p-3 bg-indigo-900/40 border border-indigo-500/30 rounded-lg text-xs text-indigo-200"><div class="font-bold flex items-center gap-1.5 mb-1.5 text-indigo-300"><div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping"></div> AI ANALYZING...</div><div class="animate-pulse text-[11px] text-indigo-200/60">최근 변동 원인을 스캔 중입니다...</div></div>`;
           } else if (state.text) {
-            aiBoxHtml = `
-              <div class="mt-3 p-3 bg-indigo-900/40 border border-indigo-500/30 rounded-lg text-xs text-indigo-100">
-                <div class="font-bold flex items-center gap-1.5 mb-1.5 text-indigo-300">
-                  <span class="text-[14px]">🤖</span> AI INSIGHT
-                </div>
-                <div class="whitespace-pre-line leading-relaxed opacity-90">${state.text}</div>
-              </div>
-            `;
+            aiBoxHtml = `<div class="mt-3 p-3 bg-indigo-900/40 border border-indigo-500/30 rounded-lg text-xs text-indigo-100"><div class="font-bold flex items-center gap-1.5 mb-1.5 text-indigo-300"><span class="text-[14px]">🤖</span> AI INSIGHT</div><div class="whitespace-pre-line leading-relaxed opacity-90">${state.text}</div></div>`;
           }
         }
 
@@ -406,7 +485,7 @@
                 
                 <div class="flex items-center space-x-2 mt-0 md:mt-2">
                   <button id="ai-btn-${index}" onclick="toggleAiSummary(${index})" class="text-[11px] bg-indigo-600/20 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-md transition font-bold tracking-wide">
-                    AI 분석
+                    단일 종목 분석
                   </button>
                   <button onclick="editStock(${index})" class="text-[11px] bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-2.5 py-1.5 rounded-md transition">
                     수정
@@ -424,6 +503,7 @@
         delete s._priceStatus;
       });
 
+      // 요약 패널 수치 업데이트
       const totalProfitAmt = totalValue - totalCost;
       const totalProfitRate = totalCost > 0 ? (totalProfitAmt / totalCost) * 100 : 0;
       
@@ -439,6 +519,50 @@
       const tColor = totalProfitRate >= 0 ? 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]' : 'text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]';
       profitAmtEl.className = `text-xs font-bold mt-0.5 ${tColor}`;
       totalProfitEl.className = `text-sm md:text-base font-bold ${tColor}`;
+
+      // 배당금 패널 수치 업데이트
+      document.getElementById('annualDiv').innerText = Math.round(totalAnnualDividendKRW).toLocaleString() + ' 원';
+      document.getElementById('monthlyDiv').innerText = Math.round(totalAnnualDividendKRW / 12).toLocaleString() + ' 원';
+
+      // 네온 도넛 차트 그리기
+      drawChart(chartLabels, chartData);
+    }
+
+    function drawChart(labels, data) {
+      if (window.portfolioChartInstance) {
+          window.portfolioChartInstance.destroy();
+      }
+      const ctx = document.getElementById('portfolioChart').getContext('2d');
+      window.portfolioChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+              labels: labels,
+              datasets: [{
+                  data: data,
+                  backgroundColor: neonColors,
+                  borderWidth: 0,
+                  hoverOffset: 6
+              }]
+          },
+          options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '75%', // 도넛 두께
+              plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        let label = context.label || '';
+                        if (label) { label += ': '; }
+                        label += Math.round(context.raw).toLocaleString() + '원';
+                        return label;
+                      }
+                    }
+                  }
+              }
+          }
+      });
     }
 
     async function updateAllStocks() {
