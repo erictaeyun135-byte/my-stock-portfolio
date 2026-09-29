@@ -2,7 +2,7 @@ import os
 import time
 import requests
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from google import genai
@@ -170,7 +170,7 @@ def get_price(name: str):
         if "error" not in res:
             return res
 
-    return {"error": f"'{name}'의 시세를 찾을 수 없습니다. 영문 티커(예: AAPL)나 6자리 종목코드로 입력해 보세요."}
+    return {"error": f"'{name}'의 시세를 찾을 수 없습니다."}
 
 @app.get("/api/analyze")
 def analyze_stock_reason(stock_name: str):
@@ -194,10 +194,8 @@ def analyze_stock_reason(stock_name: str):
                 if ("503" in err_str or "500" in err_str) and attempt < 2:
                     time.sleep(2)
                     continue
-                
                 if "429" in err_str or "quota" in err_str.lower():
                     return {"reason": "⏳ 무료 AI 사용량을 잠시 초과했습니다.\n약 1분 정도 기다리신 후 다시 눌러주세요."}
-                
                 raise err
     except Exception as e:
         return {"reason": "⚠️ AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 다시 시도해주세요."}
@@ -227,7 +225,6 @@ async def save_portfolio(request: Request):
     except Exception as e:
         return {"error": str(e)}
 
-# 👇 안드로이드 앱 설치 승인을 위한 이름표(Manifest) 발급 기능
 @app.get("/manifest.json")
 def get_manifest():
     return {
@@ -245,6 +242,12 @@ def get_manifest():
             }
         ]
     }
+
+# 👇 크롬 브라우저를 속일 가짜 서비스 워커(엔진) 추가
+@app.get("/sw.js")
+def get_sw():
+    js_code = "self.addEventListener('fetch', function(event) {});"
+    return Response(content=js_code, media_type="application/javascript")
 
 @app.get("/")
 def serve_frontend():
