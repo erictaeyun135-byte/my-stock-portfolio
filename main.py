@@ -121,7 +121,6 @@ def search_naver_finance(query: str):
         pass
     return None
 
-# 👇 새롭게 추가된 전 세계 주식/ETF 검색 엔진
 def search_yahoo_finance(query: str):
     try:
         url = f"https://query2.finance.yahoo.com/v1/finance/search?q={requests.utils.quote(query)}"
@@ -141,7 +140,6 @@ def get_price(name: str):
     query = name.strip()
     clean_q = query.lower().replace(" ", "")
 
-    # 1. 커스텀 단축어 (가장 빠름)
     if clean_q in CUSTOM_STOCK_CORRECTIONS:
         code_or_ticker, display_name, market_type = CUSTOM_STOCK_CORRECTIONS[clean_q]
         if market_type == "KR":
@@ -149,11 +147,9 @@ def get_price(name: str):
         else:
             return fetch_us_stock_price(code_or_ticker, display_name)
 
-    # 2. 한국 주식 종목코드 (6자리 숫자)
     if len(query) == 6 and query.isdigit():
         return fetch_kr_stock_price(query, query)
 
-    # 3. 네이버 증권 검색 (한국 주식 및 유명 해외 주식 한글 이름)
     naver_res = search_naver_finance(query)
     if naver_res:
         if naver_res["type"] == "KR":
@@ -163,14 +159,12 @@ def get_price(name: str):
             if "error" not in res:
                 return res
 
-    # 4. 야후 파이낸스 글로벌 검색 (네이버에 없는 모든 ETF 및 글로벌 주식)
     yahoo_res = search_yahoo_finance(query)
     if yahoo_res:
         res = fetch_us_stock_price(yahoo_res["ticker"], yahoo_res["name"])
         if "error" not in res:
             return res
 
-    # 5. 최후의 수단: 영문 티커(알파벳)로 직접 찔러보기
     if query.isalpha():
         res = fetch_us_stock_price(query.upper(), query.upper())
         if "error" not in res:
@@ -181,7 +175,7 @@ def get_price(name: str):
 @app.get("/api/analyze")
 def analyze_stock_reason(stock_name: str):
     if not GEMINI_API_KEY:
-        return {"reason": "Gemini API 키가 설정되지 않았습니다."}
+        return {"reason": "⚠️ Gemini API 키가 설정되지 않았습니다."}
 
     prompt = f"주식 종목 '{stock_name}'의 최근 주가 변동 원인을 한국어로 불렛포인트(•) 3줄로 명확히 요약해주세요."
     
@@ -200,9 +194,15 @@ def analyze_stock_reason(stock_name: str):
                 if ("503" in err_str or "500" in err_str) and attempt < 2:
                     time.sleep(2)
                     continue
+                
+                # 👇 핵심 수정 부분: 429 에러(할당량 초과) 발생 시 지저분한 코드를 예쁜 문장으로 필터링
+                if "429" in err_str or "quota" in err_str.lower():
+                    return {"reason": "⏳ 무료 AI 사용량을 잠시 초과했습니다.\n약 1분 정도 기다리신 후 다시 눌러주세요."}
+                
                 raise err
     except Exception as e:
-        return {"reason": f"구글 AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 버튼을 다시 눌러주세요.\n(에러코드: {str(e)})"}
+        # 그 외의 예상치 못한 모든 에러도 복잡한 시스템 코드를 숨기고 심플하게 출력
+        return {"reason": "⚠️ AI 서버가 일시적으로 응답하지 않습니다.\n잠시 후 다시 시도해주세요."}
 
 @app.get("/api/portfolio")
 def get_portfolio():
